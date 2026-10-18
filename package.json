@@ -1,0 +1,14 @@
+{
+  "name": "wover-chromium",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "test:browser": "node tests/browser.cjs",
+    "build": "node scripts/build-chromium.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "sharp": "0.35.5"
+  }
+}

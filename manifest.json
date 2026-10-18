@@ -2,28 +2,32 @@
   "manifest_version": 3,
   "name": "Wover",
   "version": "1.0.0",
-  "description": "Hold a key and point at any word for its definition, pronunciation and translation. Save words, see them highlighted on every page, and review them with spaced repetition.",
+  "description": "Learn vocabulary while reading: point at words for definitions and translations, save them, and review with spaced repetition.",
   "icons": {
-    "48": "icons/icon.svg",
-    "96": "icons/icon.svg"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "wover@local",
-      "strict_min_version": "142.0",
-      "data_collection_permissions": {
-        "required": ["websiteContent"]
-      }
-    }
-  },
-  "permissions": ["storage", "alarms"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
-    "scripts": ["common.js", "background.js"]
+    "service_worker": "service-worker.js"
   },
   "action": {
     "default_title": "Wover: my words",
-    "default_icon": "icons/icon.svg"
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "options_ui": {
     "page": "options.html",
@@ -31,11 +35,20 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["common.js", "content.js"],
-      "css": ["highlight.css"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "browser-api.js",
+        "common.js",
+        "content.js"
+      ],
+      "css": [
+        "highlight.css"
+      ],
       "all_frames": true,
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "minimum_chrome_version": "116"
 }

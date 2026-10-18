@@ -1,28 +1,32 @@
 'use strict';
 
-/* Background page: dictionary and translation lookups, audio, the toolbar badge. */
+/* Service worker: lookups, document helpers and the toolbar badge. */
 
-const WIKI_HEADERS = { 'Api-User-Agent': 'Wover/1.0 (Firefox extension; word lookups)' };
+const WIKI_HEADERS = { 'Api-User-Agent': 'Wover/1.0 (Chromium extension; word lookups)' };
 const CACHE_MAX = 200;
 const SCHEMA = 3;          // 2: words keyed by language, w:<lang>:<word>; 3: words know their translation's language
 const cache = new Map();   // lookup results, oldest first
 let index = null;          // saved word -> { language: memory level }, shared with content scripts
 let googleBlockedUntil = 0; // skip Google for a while after it refuses a request
-let currentAudio = null;
 let badgeTimer = 0;
-const parser = new DOMParser();
 
 /* ---------- events ---------- */
 
-browser.runtime.onMessage.addListener((msg) => {
-  switch (msg && msg.type) {
-    case 'lookup': return lookup(msg.text, msg.pageLang, msg.lang);
-    case 'translate': return translateText(msg.text, msg.lang);
-    case 'play': return play(msg.url);
-    case 'index': return getIndex();
-    case 'open-dashboard': return openDashboard(msg.hash);
-    default: return undefined;
-  }
+browser.runtime.onMessage.addListener((msg, sender, respond) => {
+  if (sender.id !== browser.runtime.id || msg?.target === 'offscreen') return;
+  const handlers = {
+    lookup: () => lookup(msg.text, msg.pageLang, msg.lang),
+    translate: () => translateText(msg.text, msg.lang),
+    play: () => offscreen('play', msg.url),
+    index: () => getIndex(),
+    'open-dashboard': () => openDashboard(msg.hash),
+  };
+  if (!Object.hasOwn(handlers, msg?.type)) return;
+  Promise.resolve().then(handlers[msg.type]).then(
+    value => respond(value ?? null),
+    error => respond({ ok: false, error: errorText(error) })
+  );
+  return true;
 });
 
 browser.storage.onChanged.addListener((changes, area) => {
@@ -128,30 +132,32 @@ function removeFromIndex(entry) {
 
 async function openDashboard(hash = '') {
   const base = browser.runtime.getURL('dashboard.html');
-  try {
-    for (const view of browser.extension.getViews({ type: 'tab' })) {
-      if (!view.location.href.startsWith(base) || !view.woverTab) continue;
-      if (hash) view.location.hash = hash;
-      await browser.tabs.update(view.woverTab.id, { active: true });
-      await browser.windows.update(view.woverTab.windowId, { focused: true });
-      return;
-    }
-  } catch (err) {
-    // Fall through and open a new tab.
-  }
-  await browser.tabs.create({ url: base + hash });
+  const safeHash = typeof hash === 'string' && hash.startsWith('#') ? hash : '';
+  const contexts = await browser.runtime.getContexts({ contextTypes: ['TAB'] });
+  const tab = contexts.find(context => context.documentUrl?.split('#')[0] === base);
+  if (tab) {
+    await browser.tabs.update(tab.tabId, { active: true, ...(safeHash ? { url: base + safeHash } : {}) });
+    await browser.windows.update(tab.windowId, { focused: true });
+  } else await browser.tabs.create({ url: base + safeHash });
 }
 
-async function play(url) {
-  if (!/^https:\/\//.test(url || '')) return { ok: false };
-  try {
-    if (currentAudio) currentAudio.pause();
-    currentAudio = new Audio(url);
-    await currentAudio.play();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+let creatingOffscreen;
+async function offscreen(operation, value) {
+  if (!creatingOffscreen) {
+    creatingOffscreen = (async () => {
+      const contexts = await browser.runtime.getContexts({
+        contextTypes: ['OFFSCREEN_DOCUMENT'], documentUrls: [browser.runtime.getURL('offscreen.html')],
+      });
+      if (!contexts.length) await browser.offscreen.createDocument({
+        url: 'offscreen.html', reasons: ['DOM_PARSER', 'AUDIO_PLAYBACK'],
+        justification: 'Parse dictionary HTML and play word pronunciation audio.',
+      });
+    })().finally(() => { creatingOffscreen = null; });
   }
+  await creatingOffscreen;
+  const result = await browser.runtime.sendMessage({ target: 'offscreen', operation, value });
+  if (!result || result.error) throw new Error(result?.error || 'Document helper did not respond.');
+  return result.value;
 }
 
 /* ---------- lookups ---------- */
@@ -201,7 +207,8 @@ async function lookup(text, pageLang, forcedLang) {
 
 async function lookUpDictionary(query, prefs, accent) {
   const lower = query.toLowerCase();
-  const titles = [...new Set([lower, query])];
+  // Prefer exact spelling: German Haus (house) differs from haus (a verb form).
+  const titles = [...new Set([query, lower])];
   const wikitext = fetchWikitext(titles[0]);
   let pick = null;
 
@@ -230,7 +237,7 @@ async function lookUpDictionary(query, prefs, accent) {
   const languages = usableLanguages(pick.data).filter((code) => code !== pick.code).slice(0, 5)
     .map((code) => ({ code: Wover.normLang(code), name: sectionName(pick.data[code], code) }));
 
-  let parsed = parseEntries(pick.data[pick.code]);
+  let parsed = await offscreen('parseEntries', pick.data[pick.code]);
   let headword = pick.title;
   let inflection = '';
   // A pure inflection ("plural of cat"): show the base word instead.
@@ -239,7 +246,7 @@ async function lookUpDictionary(query, prefs, accent) {
     if (data && data[pick.code]) {
       inflection = parsed.formText;
       headword = parsed.lemma;
-      parsed = parseEntries(data[pick.code]);
+      parsed = await offscreen('parseEntries', data[pick.code]);
     }
   }
 
@@ -312,60 +319,6 @@ async function rankLanguage(data, prefs) {
   return usable.length ? { code: usable[0], rank: 3 } : null;
 }
 
-function parseEntries(all) {
-  // Wiktionary files Translingual entries (symbols, ISO codes) under English too.
-  const own = (all || []).filter((e) => e.language !== 'Translingual');
-  const entries = own.length ? own : all || [];
-  const byPos = new Map();
-  let lemma = '';
-  let formText = '';
-  let formOnly = true;
-  for (const entry of entries) {
-    for (const def of entry.definitions || []) {
-      const { text, formOf } = cleanDefinition(def.definition || '');
-      if (!text) continue;
-      if (formOf) {
-        if (!lemma) { lemma = formOf; formText = text; }
-      } else {
-        formOnly = false;
-      }
-      const rawExamples = def.parsedExamples ? def.parsedExamples.map((x) => x.example) : def.examples || [];
-      const example = rawExamples.map(htmlToText).find(Boolean) || '';
-      const pos = entry.partOfSpeech || '';
-      if (!byPos.has(pos)) byPos.set(pos, []);
-      const defs = byPos.get(pos);
-      if (defs.length < 3) defs.push({ text: clip(text, 260), example: clip(example, 200) });
-    }
-  }
-  return {
-    meanings: [...byPos].slice(0, 4).map(([pos, defs]) => ({ pos, defs })),
-    lemma,
-    formText,
-    formOnly: formOnly && !!lemma,
-    language: (entries[0] && entries[0].language) || '',
-  };
-}
-
-function cleanDefinition(html) {
-  const body = parser.parseFromString(`<body>${html}`, 'text/html').body;
-  const hasSubsenses = !!body.querySelector('ol, ul');
-  body.querySelectorAll('ol, ul, dl, sup, style, link, .maintenance-line, .reference, .previewonly')
-    .forEach((n) => n.remove());
-  const text = tidy(body.textContent);
-  // A heading like "Terms relating to animals." whose real senses follow as separate definitions.
-  const heading = body.querySelector('.use-with-mention:not(.form-of-definition)');
-  if (hasSubsenses && heading && tidy(heading.textContent) === text) return { text: '', formOf: '' };
-  const link = body.querySelector('.form-of-definition-link');
-  return { text, formOf: link ? tidy(link.textContent) : '' };
-}
-
-function htmlToText(html) {
-  const body = parser.parseFromString(`<body>${html || ''}`, 'text/html').body;
-  body.querySelectorAll('sup, style, link').forEach((n) => n.remove());
-  return tidy(body.textContent);
-}
-
-const tidy = (s) => String(s || '').replace(/\s+/g, ' ').replace(/\s+([,.;:])/g, '$1').trim();
 const clip = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
 
 const ACCENTS = {
@@ -531,15 +484,15 @@ async function myMemoryTranslate(text, source, target, email) {
   const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`MyMemory answered ${res.status}.`);
   const data = await res.json();
-  const main = decodeEntities((data.responseData && data.responseData.translatedText) || '').trim();
+  const main = (await offscreen('decodeEntities', (data.responseData && data.responseData.translatedText) || '')).trim();
   if (data.quotaFinished || /MYMEMORY WARNING/i.test(main)) {
     throw new Error('MyMemory’s free daily limit is used up. Adding your email in Settings raises it.');
   }
-  if (Number(data.responseStatus) !== 200) throw new Error(decodeEntities(data.responseDetails || 'MyMemory could not translate this.'));
+  if (Number(data.responseStatus) !== 200) throw new Error(await offscreen('decodeEntities', data.responseDetails || 'MyMemory could not translate this.'));
   const seen = new Set([main.toLowerCase(), text.toLowerCase()]);
   const terms = [];
   for (const m of data.matches || []) {
-    const t = decodeEntities(m.translation || '').trim();
+    const t = (await offscreen('decodeEntities', m.translation || '')).trim();
     if (!t || t.length > 60 || Number(m.match) < 0.5 || seen.has(t.toLowerCase())) continue;
     seen.add(t.toLowerCase());
     terms.push(t);
@@ -564,10 +517,6 @@ async function fetchWithTimeout(url, options = {}, ms = 8000) {
   } finally {
     clearTimeout(timer);
   }
-}
-
-function decodeEntities(s) {
-  return parser.parseFromString(`<body>${s}`, 'text/html').body.textContent;
 }
 
 function errorText(err) {

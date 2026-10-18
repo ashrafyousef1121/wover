@@ -1,74 +1,73 @@
-<p align="center">
-  <img src="icons/icon.svg" width="96" height="96" alt="Wover logo">
-</p>
+# Wover for Chromium
 
-<h1 align="center">Wover</h1>
+Hold **Ctrl** and point at a word to see definitions, pronunciation and translation. Save words with their sentence, highlight them while reading, and review them with spaced repetition.
 
-<p align="center">
-  <b>Hold a key, point at a word, learn it.</b><br>
-  A Firefox extension for learning vocabulary while you read.
-</p>
+Chromium port of [AEA1212/wover](https://github.com/AEA1212/wover). This fork’s `chromium` branch is for Chrome and Chromium-based browsers, including Arc. The original Firefox version remains on the unchanged `main` branch and in the upstream repository. This is a review build, not a published Chrome Web Store release.
 
-<p align="center">
-  <img alt="Firefox 142+" src="https://img.shields.io/badge/Firefox-142%2B-FF7139?logo=firefoxbrowser&logoColor=white">
-  <img alt="Manifest V3" src="https://img.shields.io/badge/Manifest-V3-555555">
-  <img alt="Status: prototype" src="https://img.shields.io/badge/status-prototype-orange">
-</p>
+## Features
 
-<p align="center">
-  <img src="docs/screenshots/popup.png" width="760" alt="The Wover popup over an article, showing a word's pronunciation, translation and definitions. Saved words in the article are highlighted.">
-</p>
+- Definitions, pronunciation and translations while you read
+- Saved vocabulary with source sentences and separate language lists
+- Word highlighting and spaced-repetition review
+- Light, dark and system themes, plus configurable highlight colours
+- JSON backup/restore and CSV export
 
-## ✨ Features
+![Wover lookup popup in Chromium](docs/screenshots/chromium-popup.png)
 
-- 🔍 Hold <kbd>Ctrl</kbd> and point at a word to see its definition, pronunciation and translation
-- ➕ Save words with one click, together with the sentence you found them in
-- 🖍️ Saved words are highlighted on every page, more strongly the less you know them
-- 🧠 Review them with spaced-repetition flashcards
-- 🌍 Keep a separate list for each language
-- 🎨 Pick a colour scheme and a light, dark or system theme
-- 💾 Back up, restore and export your words
-- 🔒 Your words stay in your browser
+![Spaced-repetition review in Chromium](docs/screenshots/chromium-review.png)
 
-## 📸 Screenshots
+The screenshots use test vocabulary in the actual extension.
 
-| Review | Word lists |
-| --- | --- |
-| <img src="docs/screenshots/review.png" alt="A flashcard with its translation, definitions, rating buttons and review stats."> | <img src="docs/screenshots/words.png" alt="The word list with English and German lists."> |
+## Get the Chromium branch
 
-| Colour schemes | Dark mode |
-| --- | --- |
-| <img src="docs/screenshots/colors.png" alt="Highlighting settings with colour schemes and highlight levels."> | <img src="docs/screenshots/popup-dark.png" alt="The popup in dark mode."> |
+```sh
+git clone --branch chromium https://github.com/ashrafyousef1121/wover.git
+cd wover
+npm ci
+npm run build
+```
 
-## 📦 Installation
+Build prerequisites are listed below. Build output is generated locally and is not committed.
 
-### Firefox Add-ons (coming soon)
+## Try it locally
 
-<a href="https://addons.mozilla.org/firefox/addon/wover/"><img alt="Firefox Add-ons: coming soon" src="https://img.shields.io/badge/Firefox_Add--ons-coming_soon-FF7139?logo=firefoxbrowser&logoColor=white&style=for-the-badge"></a>
+1. Build from source as above, then open `chrome://extensions` in Chrome, or `arc://extensions` in Arc. The manifest requires Chromium 116 or later; that minimum version has not been separately tested.
+2. Enable **Developer mode**, choose **Load unpacked**, and select `dist/chromium` in this repository.
+3. Select a translation language in Wover's settings. Pin Wover from the browser's Extensions menu.
+4. Open or reload a regular web page, hold **Ctrl**, and point at a word. Save it, then click the toolbar icon to review it.
 
-### From source
+Internal browser pages, the Chrome Web Store, and built-in PDF viewers do not allow these content scripts. File URLs require enabling **Allow access to file URLs** in the extension's details. Incognito access is off unless you enable it.
 
-1. Download this repository (**Code → Download ZIP**, then unzip it) or run `git clone https://github.com/AEA1212/wover.git`.
-2. In Firefox, open `about:debugging#/runtime/this-firefox`.
-3. Click **Load Temporary Add-on…** and choose `manifest.json`.
+## Build and test
 
-⚠️ Firefox removes temporary add-ons when it restarts, so repeat step 3 after each restart.
+Node.js 22+, npm and Python 3 are needed to build; the browser tests also require OpenSSL on your PATH. On Windows, set the `PYTHON` environment variable if your Python executable is named `python` instead of `python3`.
 
-## 🚀 How to use
+Users of the packaged extension need none of these development tools.
 
-1. Choose the language you want translations in (the settings open when you install Wover).
-2. On any web page, hold <kbd>Ctrl</kbd> and point at a word.
-3. Click **+ Add to my … words**.
-4. Click the Wover button in the toolbar to review your words.
+```sh
+npm ci
+npm run build
+npm test
+npx playwright install chromium
+npm run test:browser
+```
 
-⚠️ Wover can't run on Firefox's own pages, in Reader View or in the PDF viewer.
+If using an already installed test browser, set `CHROMIUM_EXECUTABLE` to its executable. `HEADED=1` shows the test browser. Tests create an isolated, disposable profile and never use your personal browsing profile. Screenshots and the test report go in `test-results/`. The disposable browser profile bypasses certificate checks only for the local HTTPS audio fixture. The extension does not change certificate settings. Live-provider smoke results are recorded separately and are not assertions of ongoing provider availability.
 
-## 🔒 Privacy
+`npm run build` produces `dist/chromium/` and `dist/wover-chromium-1.0.0.zip`. Only explicitly listed runtime files are packaged. No dependencies, tests, credentials, or remote JavaScript are included.
 
-Your words and settings are stored only in Firefox. When you look a word up, only that word (or a sentence you ask to translate) is sent to Wiktionary and to a translation service (Google Translate or MyMemory).
+## Chromium implementation
 
----
+The MV3 service worker owns storage, lookup requests, alarms and the badge. An on-demand offscreen document parses dictionary HTML and plays pronunciation recordings. Messages keep their response channel open across asynchronous operations. Dashboard reuse finds open extension contexts instead of relying on Firefox background-window access. PNG icons are rendered from the original SVG. Word storage and backup formats remain compatible with the upstream extension.
 
-<p align="center">
-  <sub>⚠️ Mostly vibe coded and still a prototype, so it may have bugs. Back up your words now and then, and please report problems in <a href="../../issues">Issues</a>.</sub>
-</p>
+Lookups use Wiktionary, with DictionaryAPI.dev as an English fallback. Translations use Google Translate or MyMemory. External service availability, quotas, and voices vary. Automated browser tests use deterministic responses for reproducibility; live-provider results are recorded separately.
+
+## Validation status
+
+Four core tests and fourteen browser checks passed on Chrome for Testing 151.0.7922.34. These cover lookup/parsing, case-sensitive German headwords, translation, popup saving, highlighting, review, backup export/restore, audio playback, offscreen recreation, worker restart and dashboard reuse.
+
+Manual checks in the installed Arc browser passed for loading the extension, live English lookup and German translation, saving, flashcard reveal and scheduling, persistence after reload, themes, and backup download. Arc showed no extension error indicator. Ctrl-hover in Arc and audible pronunciation quality still need a manual check. See [TESTING.md](TESTING.md) for the remaining acceptance checks.
+
+## Before publication
+
+See [TESTING.md](TESTING.md), [PRIVACY.md](PRIVACY.md), and [STORE-CHECKLIST.md](STORE-CHECKLIST.md). Nothing is automatically pushed, signed, uploaded or submitted.
