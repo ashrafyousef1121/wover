@@ -1,8 +1,8 @@
-# Wover for Chromium
+# Wover for Chrome
 
 Hold **Ctrl** and point at a word to see definitions, pronunciation and translation. Save words with their sentence, highlight them while reading, and review them with spaced repetition.
 
-Chromium port of [AEA1212/wover](https://github.com/AEA1212/wover). This fork’s `chromium` branch is for Chrome and Chromium-based browsers, including Arc. The original Firefox version remains on the unchanged `main` branch and in the upstream repository. This is a review build, not a published Chrome Web Store release.
+Chrome version of [AEA1212/wover](https://github.com/AEA1212/wover), also compatible with Chromium-based browsers such as Arc. The code lives on this fork’s `chromium` branch. The original Firefox version remains on the unchanged `main` branch and in the upstream repository. This is a review build, not a published Chrome Web Store release.
 
 ## Features
 
