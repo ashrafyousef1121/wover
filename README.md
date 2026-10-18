@@ -1,6 +1,24 @@
-# Wover for Chrome
+<p align="center">
+  <img src="icons/icon.svg" width="96" height="96" alt="Wover logo">
+</p>
 
-Hold **Ctrl** and point at a word to see definitions, pronunciation and translation. Save words with their sentence, highlight them while reading, and review them with spaced repetition.
+<h1 align="center">Wover for Chrome</h1>
+
+<p align="center">
+  <b>Hold a key, point at a word, learn it.</b><br>
+  A Chrome extension for learning vocabulary while you read.<br>
+  Also compatible with Chromium-based browsers such as Arc.
+</p>
+
+<p align="center">
+  <img alt="Chrome 116+" src="https://img.shields.io/badge/Chrome-116%2B-4285F4?logo=googlechrome&logoColor=white">
+  <img alt="Manifest V3" src="https://img.shields.io/badge/Manifest-V3-555555">
+  <img alt="Status: prototype" src="https://img.shields.io/badge/status-prototype-orange">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/popup.png" width="760" alt="The Wover popup over an article, showing a word's pronunciation, translation and definitions. Saved words in the article are highlighted.">
+</p>
 
 Chrome version of [AEA1212/wover](https://github.com/AEA1212/wover), also compatible with Chromium-based browsers such as Arc. The code lives on this fork’s `chromium` branch. The original Firefox version remains on the unchanged `main` branch and in the upstream repository. This is a review build, not a published Chrome Web Store release.
 
@@ -12,11 +30,17 @@ Chrome version of [AEA1212/wover](https://github.com/AEA1212/wover), also compat
 - Light, dark and system themes, plus configurable highlight colours
 - JSON backup/restore and CSV export
 
-![Wover lookup popup in Chromium](docs/screenshots/chromium-popup.png)
+## 📸 Screenshots
 
-![Spaced-repetition review in Chromium](docs/screenshots/chromium-review.png)
+| Review | Word lists |
+| --- | --- |
+| <img src="docs/screenshots/review.png" alt="A flashcard with its translation, definitions, rating buttons and review stats."> | <img src="docs/screenshots/words.png" alt="The word list with English and German lists."> |
 
-The screenshots use test vocabulary in the actual extension.
+| Colour schemes | Dark mode |
+| --- | --- |
+| <img src="docs/screenshots/colors.png" alt="Highlighting settings with colour schemes and highlight levels."> | <img src="docs/screenshots/popup-dark.png" alt="The popup in dark mode."> |
+
+Screenshots are reused from the original Wover README and show the shared interface. Chrome and Arc validation results are documented below.
 
 ## Get the Chromium branch
 
